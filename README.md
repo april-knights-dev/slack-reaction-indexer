@@ -21,6 +21,11 @@ SLACK_APP_TOKEN=あなたのアプリトークン
 ## 実行方法
 
 以下のコマンドを実行してください。
-```python main.py``````
+
+```python main.py```
+
 
 これにより、アプリが起動し、指定したショートカットが実行されると、リアクションをしたユーザーの一覧が作成されます。
+
+
+![image](https://github.com/april-knights-dev/slack-reaction-indexer/assets/33051481/cfda68c5-3316-417f-b7d4-2085af7c2719)
