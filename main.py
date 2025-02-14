@@ -266,25 +266,28 @@ def handle_reaction_options_submission(ack, body, client, logger):
             try:
                 logger.info(f"Fetching members for channel: {channel_id}")
                 members_response = client.conversations_members(channel=channel_id)
-                logger.info(f"Initial members response: {members_response}")
                 
-                all_members = set(members_response['members'])
-                logger.info(f"Initial member count: {len(all_members)}")
+                # メンバー情報を取得してBotを除外
+                members_info = get_users_info(client, members_response['members'])
+                all_members = {
+                    user_id for user_id, info in members_info.items()
+                    if not (info.get("is_bot", False) or 
+                           info.get("is_app_user", False) or 
+                           info.get("deleted", False))
+                }
                 
+                # ページネーション処理は既存のまま
                 while members_response.get('response_metadata', {}).get('next_cursor'):
                     cursor = members_response['response_metadata']['next_cursor']
-                    logger.info(f"Fetching more members with cursor: {cursor}")
-                    
                     members_response = client.conversations_members(
                         channel=channel_id,
                         cursor=cursor
                     )
                     new_members = set(members_response['members'])
                     all_members.update(new_members)
-                    logger.info(f"Added {len(new_members)} more members. Total: {len(all_members)}")
+
             except Exception as e:
                 logger.exception("Error fetching channel members")
-                # エラーが発生しても処理を継続
                 all_members = set()
 
         reacted_users: Set[str] = set()
@@ -293,23 +296,38 @@ def handle_reaction_options_submission(ack, body, client, logger):
         if 'reactions' in message:
             reactions = message['reactions']
             logger.info(f"Processing {len(reactions)} reactions")
+            
+            # リアクションしたユーザーの情報を一括取得
+            all_reacted_users = set()
+            for reaction in reactions:
+                all_reacted_users.update(reaction['users'])
+            
+            reacted_users_info = get_users_info(client, list(all_reacted_users))
+            
+            # リアクションごとの処理
+            for reaction in reactions:
+                # Botと削除済みユーザーを除外
+                active_users = [
+                    user_id for user_id in reaction['users']
+                    if user_id in reacted_users_info and not (
+                        reacted_users_info[user_id].get("is_bot", False) or 
+                        reacted_users_info[user_id].get("is_app_user", False) or 
+                        reacted_users_info[user_id].get("deleted", False)
+                    )
+                ]
+                reacted_users.update(active_users)
+                user_mentions = [f"<@{user}>" for user in active_users]
+                user_mentions_str = ', '.join(user_mentions)
+                blocks.append({
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f":{reaction['name']}: (人数: {len(active_users)}) : {user_mentions_str}"
+                    }
+                })
         else:
             logger.info("No reactions found in message")
             reactions = []
-
-        # リアクションをしたユーザーの一覧を作成
-        for reaction in reactions:
-            users = reaction['users']
-            reacted_users.update(users)
-            user_mentions = [f"<@{user}>" for user in users]
-            user_mentions_str = ', '.join(user_mentions)
-            blocks.append({
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": f":{reaction['name']}: (人数: {len(users)}) : {user_mentions_str}"
-                }
-            })
 
         if show_non_reacted:
             blocks.append({"type": "divider"})
@@ -355,8 +373,8 @@ def handle_reaction_options_submission(ack, body, client, logger):
             # フォールバック：一般的なSlackのURLフォーマット
             message_url = f"https://slack.com/archives/{channel_id}/p{message_id.replace('.', '')}"
 
-        # 統計情報を追加
-        stats_text = f"*統計情報*\n• リアクション済: {len(reacted_users)}人"
+        # 統計情報を追加（Bot除外の注記を追加）
+        stats_text = f"*統計情報*（Bot除く）\n• リアクション済: {len(reacted_users)}人"
         if show_non_reacted:
             stats_text += f"\n• 全メンバー数: {len(all_members)}人\n• 未リアクション: {len(all_members - reacted_users)}人"
 
