@@ -286,10 +286,9 @@ def handle_view_submission(ack, body, client, view, logger):
         ]
 
         # リアクション詳細
-        for idx, r in enumerate(reaction_counts):
-            # 画像のように数字アイコンを使いたいが、標準emojiで近いものを代用
-            # 1️⃣, 2️⃣ など
-            rank_icon = f"{idx + 1}️⃣" if idx < 10 else "•"
+        for r in reaction_counts:
+            # リアクションの絵文字を表示
+            emoji_text = f":{r['name']}:"
             
             user_mentions = [f"<@{u}>" for u in r["users"]]
             user_mentions_str = ", ".join(user_mentions)
@@ -298,7 +297,7 @@ def handle_view_submission(ack, body, client, view, logger):
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": f"{rank_icon} (人数: {r['count']}) : {user_mentions_str}"
+                    "text": f"{emoji_text} (人数: {r['count']}) : {user_mentions_str}"
                 }
             })
 
