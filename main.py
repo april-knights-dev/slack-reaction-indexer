@@ -107,10 +107,46 @@ def handle_shortcut(ack, body, client):
 
     message_ts = body['message']['ts']
     channel_id = body['channel']['id']
+    trigger_id = body["trigger_id"]
+
+    try:
+        # Botがチャンネルに参加しているか確認
+        channel_info = client.conversations_info(channel=channel_id)
+        if not channel_info.get("channel", {}).get("is_member"):
+            # 参加していない場合、エラーモーダルを表示
+            client.views_open(
+                trigger_id=trigger_id,
+                view={
+                    "type": "modal",
+                    "title": {"type": "plain_text", "text": "エラー"},
+                    "close": {"type": "plain_text", "text": "閉じる"},
+                    "blocks": [
+                        {
+                            "type": "section",
+                            "text": {
+                                "type": "mrkdwn",
+                                "text": "⚠️ *Botがチャンネルに参加していません*"
+                            }
+                        },
+                        {
+                            "type": "section",
+                            "text": {
+                                "type": "mrkdwn",
+                                "text": "この機能を使用するには、まずこのアプリ (Bot) をチャンネルに招待してください。\n`/invite @ReactionIndexer` などのコマンドで招待してから、再度実行してください。"
+                            }
+                        }
+                    ]
+                }
+            )
+            return
+    except SlackApiError as e:
+        logger.error(f"Error checking channel membership: {e}")
+        # 権限エラーなどで確認できない場合も一旦続行またはエラー表示（ここでは続行させてAPIエラーに任せるか、安牌でエラー表示するか。続行が無難）
+        pass
     
-    # モーダルの表示
+    # モーダルの表示 (通常フロー)
     client.views_open(
-        trigger_id=body["trigger_id"],
+        trigger_id=trigger_id,
         view={
             "type": "modal",
             "callback_id": "reaction_stats_modal",
